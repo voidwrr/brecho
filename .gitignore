@@ -1,0 +1,19 @@
+# Arquivos de banco de dados SQLite
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Arquivos de ambiente e segredos (caso venham a usar)
+.env
+.env.local
+
+# Pastas de IDE e Editores
+.vscode/
+.idea/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
