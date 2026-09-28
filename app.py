@@ -25,16 +25,17 @@ if menu == "Cadastrar Produto":
             tamanho = st.text_input("Tamanho (Ex: P, M, 38, Único)")
         
         with col2:
-            preco_custo = st.number_input("Preço de Custo (R$)", min_value=0.0, step=1.0)
-            preco_venda = st.number_input("Preço de Venda (R$)", min_value=0.0, step=1.0)
+            quantidade = st.number_input("Quantidade em Estoque", min_value=1, value=1, step=1)
+            preco_custo = st.number_input("Preço de Custo Unitário (R$)", min_value=0.0, step=1.0)
+            preco_venda = st.number_input("Preço de Venda Unitário (R$)", min_value=0.0, step=1.0)
             descricao = st.text_area("Descrição / Detalhes")
         
         submetido = st.form_submit_button("Salvar Produto")
         
         if submetido:
             if nome and preco_venda > 0:
-                banco.cadastrar_produto(nome, marca, descricao, tamanho, categoria, preco_custo, preco_venda)
-                st.success(f"Produto '{nome}' cadastrado com sucesso!")
+                banco.cadastrar_produto(nome, marca, descricao, tamanho, categoria, quantidade, preco_custo, preco_venda)
+                st.success(f"Produto '{nome}' ({quantidade} un) cadastrado com sucesso!")
             else:
                 st.error("Preencha o nome e um preço de venda válido.")
 
@@ -48,7 +49,7 @@ elif menu == "Gerenciar / Editar Produtos":
         st.info("Nenhum produto cadastrado no banco.")
     else:
         opcoes_produtos = {
-            f"ID {row['id']} - {row['nome']} [{row['marca'] if row['marca'] else 'Sem Marca'}] ({row['status']})": row['id']
+            f"ID {row['id']} - {row['nome']} [{row['marca'] if row['marca'] else 'Sem Marca'}] (Qtd: {row['quantidade']} | Status: {row['status']})": row['id']
             for _, row in df_todos.iterrows()
         }
         
@@ -72,19 +73,20 @@ elif menu == "Gerenciar / Editar Produtos":
                     nova_cat = st.selectbox("Categoria", cats, index=cat_idx)
                     
                     novo_tam = st.text_input("Tamanho", value=dados_prod['tamanho'] if dados_prod['tamanho'] else "")
+                    nova_qtd = st.number_input("Quantidade", min_value=0, value=int(dados_prod['quantidade']), step=1)
                 
                 with col2:
-                    novo_custo = st.number_input("Custo (R$)", min_value=0.0, value=float(dados_prod['preco_custo']), step=1.0)
-                    novo_venda = st.number_input("Venda (R$)", min_value=0.0, value=float(dados_prod['preco_venda']), step=1.0)
+                    novo_custo = st.number_input("Custo Unitário (R$)", min_value=0.0, value=float(dados_prod['preco_custo']), step=1.0)
+                    novo_venda = st.number_input("Venda Unitário (R$)", min_value=0.0, value=float(dados_prod['preco_venda']), step=1.0)
                     
-                    statuses = ["disponivel", "vendido", "reservado"]
+                    statuses = ["disponivel", "esgotado", "reservado"]
                     status_idx = statuses.index(dados_prod['status']) if dados_prod['status'] in statuses else 0
                     novo_status = st.selectbox("Status", statuses, index=status_idx)
                     
                     nova_desc = st.text_area("Descrição", value=dados_prod['descricao'] if dados_prod['descricao'] else "")
                 
                 if st.form_submit_button("Atualizar Produto"):
-                    banco.atualizar_produto(prod_id, novo_nome, nova_marca, nova_desc, novo_tam, nova_cat, novo_custo, novo_venda, novo_status)
+                    banco.atualizar_produto(prod_id, novo_nome, nova_marca, nova_desc, novo_tam, nova_cat, nova_qtd, novo_custo, novo_venda, novo_status)
                     st.success("Produto atualizado com sucesso!")
                     st.rerun()
 
@@ -110,24 +112,30 @@ elif menu == "Registrar Venda":
         st.info("Nenhum produto disponível no momento.")
     else:
         opcoes_produtos = {
-            f"ID {row['id']} - {row['nome']} [{row['marca'] if row['marca'] else 'Sem marca'}] (R$ {row['preco_venda']:.2f})": row['id']
+            f"ID {row['id']} - {row['nome']} [{row['marca'] if row['marca'] else 'Sem marca'}] (Disp: {row['quantidade']} un | R$ {row['preco_venda']:.2f} un)": row['id']
             for _, row in df_disponiveis.iterrows()
         }
         
         produto_selecionado = st.selectbox("Selecione o Produto", list(opcoes_produtos.keys()))
         produto_id = opcoes_produtos[produto_selecionado]
         
-        preco_padrao = float(df_disponiveis[df_disponiveis['id'] == produto_id]['preco_venda'].values[0])
+        prod_row = df_disponiveis[df_disponiveis['id'] == produto_id].iloc[0]
+        qtd_maxima = int(prod_row['quantidade'])
+        preco_padrao = float(prod_row['preco_venda'])
         
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
-            valor_final = st.number_input("Valor Final Cobrado (R$)", min_value=0.0, value=preco_padrao, step=1.0)
+            qtd_vendida = st.number_input("Qtd Vendida", min_value=1, max_value=qtd_maxima, value=1, step=1)
         with col2:
+            valor_unitario = st.number_input("Valor Unitário Cobrado (R$)", min_value=0.0, value=preco_padrao, step=1.0)
+        with col3:
             forma_pagamento = st.selectbox("Forma de Pagamento", ["pix", "dinheiro", "cartao_credito", "cartao_debito"])
             
+        st.info(f"**Total da Venda:** R$ {valor_unitario * qtd_vendida:.2f}")
+            
         if st.button("Confirmar Venda"):
-            banco.registrar_venda(produto_id, valor_final, forma_pagamento)
-            st.success("Venda registrada com sucesso!")
+            banco.registrar_venda(produto_id, qtd_vendida, valor_unitario, forma_pagamento)
+            st.success("Venda registrada com sucesso e estoque atualizado!")
             st.rerun()
 
 # --- OPÇÃO 4: REGISTRAR GASTOS ---
@@ -163,7 +171,7 @@ elif menu == "Registrar Gastos":
                 st.success("Gasto removido!")
                 st.rerun()
         else:
-            st.info("Nenhum gasto cadastrado.")
+            st.info("Nenum gasto cadastrado.")
 
 # --- OPÇÃO 5: RELATÓRIO FINANCEIRO ---
 elif menu == "Relatório Financeiro":
@@ -172,7 +180,7 @@ elif menu == "Relatório Financeiro":
     df_vendas = banco.relatorio_vendas()
     df_gastos = banco.listar_gastos()
     
-    faturamento_total = df_vendas['valor_vendido'].sum() if not df_vendas.empty else 0.0
+    faturamento_total = df_vendas['valor_total_vendido'].sum() if not df_vendas.empty else 0.0
     lucro_bruto_vendas = df_vendas['lucro_bruto'].sum() if not df_vendas.empty else 0.0
     total_gastos = df_gastos['valor'].sum() if not df_gastos.empty else 0.0
     
